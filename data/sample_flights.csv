@@ -1,0 +1,151 @@
+Airline,Source,Destination,Duration_Minutes,Total_Stops,Price
+IndiGo,Delhi,Mumbai,125,0,4200
+Air India,Mumbai,Delhi,140,1,6800
+Vistara,Bengaluru,Delhi,165,1,11200
+SpiceJet,Delhi,Bengaluru,95,0,3900
+AirAsia,Chennai,Goa,110,0,3600
+IndiGo,Hyderabad,Chennai,150,1,5900
+Vistara,Mumbai,Kolkata,180,1,9800
+Air India,Kolkata,Mumbai,135,1,7200
+Akasa Air,Delhi,Jaipur,80,0,3300
+SpiceJet,Goa,Delhi,75,0,3100
+IndiGo,Chennai,Mumbai,130,0,4500
+AirAsia,Delhi,Bengaluru,160,1,5100
+Air India,Bengaluru,Chennai,145,1,7500
+Vistara,Hyderabad,Delhi,155,1,8900
+Akasa Air,Mumbai,Goa,100,0,3400
+IndiGo,Delhi,Mumbai,125,0,4200
+Air India,Mumbai,Delhi,140,1,6800
+Vistara,Bengaluru,Delhi,165,1,11200
+SpiceJet,Delhi,Bengaluru,95,0,3900
+AirAsia,Chennai,Goa,110,0,3600
+IndiGo,Hyderabad,Chennai,150,1,5900
+Vistara,Mumbai,Kolkata,180,1,9800
+Air India,Kolkata,Mumbai,135,1,7200
+Akasa Air,Delhi,Jaipur,80,0,3300
+SpiceJet,Goa,Delhi,75,0,3100
+IndiGo,Chennai,Mumbai,130,0,4500
+AirAsia,Delhi,Bengaluru,160,1,5100
+Air India,Bengaluru,Chennai,145,1,7500
+Vistara,Hyderabad,Delhi,155,1,8900
+Akasa Air,Mumbai,Goa,100,0,3400
+IndiGo,Delhi,Mumbai,125,0,4200
+Air India,Mumbai,Delhi,140,1,6800
+Vistara,Bengaluru,Delhi,165,1,11200
+SpiceJet,Delhi,Bengaluru,95,0,3900
+AirAsia,Chennai,Goa,110,0,3600
+IndiGo,Hyderabad,Chennai,150,1,5900
+Vistara,Mumbai,Kolkata,180,1,9800
+Air India,Kolkata,Mumbai,135,1,7200
+Akasa Air,Delhi,Jaipur,80,0,3300
+SpiceJet,Goa,Delhi,75,0,3100
+IndiGo,Chennai,Mumbai,130,0,4500
+AirAsia,Delhi,Bengaluru,160,1,5100
+Air India,Bengaluru,Chennai,145,1,7500
+Vistara,Hyderabad,Delhi,155,1,8900
+Akasa Air,Mumbai,Goa,100,0,3400
+IndiGo,Delhi,Mumbai,125,0,4200
+Air India,Mumbai,Delhi,140,1,6800
+Vistara,Bengaluru,Delhi,165,1,11200
+SpiceJet,Delhi,Bengaluru,95,0,3900
+AirAsia,Chennai,Goa,110,0,3600
+IndiGo,Hyderabad,Chennai,150,1,5900
+Vistara,Mumbai,Kolkata,180,1,9800
+Air India,Kolkata,Mumbai,135,1,7200
+Akasa Air,Delhi,Jaipur,80,0,3300
+SpiceJet,Goa,Delhi,75,0,3100
+IndiGo,Chennai,Mumbai,130,0,4500
+AirAsia,Delhi,Bengaluru,160,1,5100
+Air India,Bengaluru,Chennai,145,1,7500
+Vistara,Hyderabad,Delhi,155,1,8900
+Akasa Air,Mumbai,Goa,100,0,3400
+IndiGo,Delhi,Mumbai,125,0,4200
+Air India,Mumbai,Delhi,140,1,6800
+Vistara,Bengaluru,Delhi,165,1,11200
+SpiceJet,Delhi,Bengaluru,95,0,3900
+AirAsia,Chennai,Goa,110,0,3600
+IndiGo,Hyderabad,Chennai,150,1,5900
+Vistara,Mumbai,Kolkata,180,1,9800
+Air India,Kolkata,Mumbai,135,1,7200
+Akasa Air,Delhi,Jaipur,80,0,3300
+SpiceJet,Goa,Delhi,75,0,3100
+IndiGo,Chennai,Mumbai,130,0,4500
+AirAsia,Delhi,Bengaluru,160,1,5100
+Air India,Bengaluru,Chennai,145,1,7500
+Vistara,Hyderabad,Delhi,155,1,8900
+Akasa Air,Mumbai,Goa,100,0,3400
+IndiGo,Delhi,Mumbai,125,0,4200
+Air India,Mumbai,Delhi,140,1,6800
+Vistara,Bengaluru,Delhi,165,1,11200
+SpiceJet,Delhi,Bengaluru,95,0,3900
+AirAsia,Chennai,Goa,110,0,3600
+IndiGo,Hyderabad,Chennai,150,1,5900
+Vistara,Mumbai,Kolkata,180,1,9800
+Air India,Kolkata,Mumbai,135,1,7200
+Akasa Air,Delhi,Jaipur,80,0,3300
+SpiceJet,Goa,Delhi,75,0,3100
+IndiGo,Chennai,Mumbai,130,0,4500
+AirAsia,Delhi,Bengaluru,160,1,5100
+Air India,Bengaluru,Chennai,145,1,7500
+Vistara,Hyderabad,Delhi,155,1,8900
+Akasa Air,Mumbai,Goa,100,0,3400
+IndiGo,Delhi,Mumbai,125,0,4200
+Air India,Mumbai,Delhi,140,1,6800
+Vistara,Bengaluru,Delhi,165,1,11200
+SpiceJet,Delhi,Bengaluru,95,0,3900
+AirAsia,Chennai,Goa,110,0,3600
+IndiGo,Hyderabad,Chennai,150,1,5900
+Vistara,Mumbai,Kolkata,180,1,9800
+Air India,Kolkata,Mumbai,135,1,7200
+Akasa Air,Delhi,Jaipur,80,0,3300
+SpiceJet,Goa,Delhi,75,0,3100
+IndiGo,Chennai,Mumbai,130,0,4500
+AirAsia,Delhi,Bengaluru,160,1,5100
+Air India,Bengaluru,Chennai,145,1,7500
+Vistara,Hyderabad,Delhi,155,1,8900
+Akasa Air,Mumbai,Goa,100,0,3400
+IndiGo,Delhi,Mumbai,125,0,4200
+Air India,Mumbai,Delhi,140,1,6800
+Vistara,Bengaluru,Delhi,165,1,11200
+SpiceJet,Delhi,Bengaluru,95,0,3900
+AirAsia,Chennai,Goa,110,0,3600
+IndiGo,Hyderabad,Chennai,150,1,5900
+Vistara,Mumbai,Kolkata,180,1,9800
+Air India,Kolkata,Mumbai,135,1,7200
+Akasa Air,Delhi,Jaipur,80,0,3300
+SpiceJet,Goa,Delhi,75,0,3100
+IndiGo,Chennai,Mumbai,130,0,4500
+AirAsia,Delhi,Bengaluru,160,1,5100
+Air India,Bengaluru,Chennai,145,1,7500
+Vistara,Hyderabad,Delhi,155,1,8900
+Akasa Air,Mumbai,Goa,100,0,3400
+IndiGo,Delhi,Mumbai,125,0,4200
+Air India,Mumbai,Delhi,140,1,6800
+Vistara,Bengaluru,Delhi,165,1,11200
+SpiceJet,Delhi,Bengaluru,95,0,3900
+AirAsia,Chennai,Goa,110,0,3600
+IndiGo,Hyderabad,Chennai,150,1,5900
+Vistara,Mumbai,Kolkata,180,1,9800
+Air India,Kolkata,Mumbai,135,1,7200
+Akasa Air,Delhi,Jaipur,80,0,3300
+SpiceJet,Goa,Delhi,75,0,3100
+IndiGo,Chennai,Mumbai,130,0,4500
+AirAsia,Delhi,Bengaluru,160,1,5100
+Air India,Bengaluru,Chennai,145,1,7500
+Vistara,Hyderabad,Delhi,155,1,8900
+Akasa Air,Mumbai,Goa,100,0,3400
+IndiGo,Delhi,Mumbai,125,0,4200
+Air India,Mumbai,Delhi,140,1,6800
+Vistara,Bengaluru,Delhi,165,1,11200
+SpiceJet,Delhi,Bengaluru,95,0,3900
+AirAsia,Chennai,Goa,110,0,3600
+IndiGo,Hyderabad,Chennai,150,1,5900
+Vistara,Mumbai,Kolkata,180,1,9800
+Air India,Kolkata,Mumbai,135,1,7200
+Akasa Air,Delhi,Jaipur,80,0,3300
+SpiceJet,Goa,Delhi,75,0,3100
+IndiGo,Chennai,Mumbai,130,0,4500
+AirAsia,Delhi,Bengaluru,160,1,5100
+Air India,Bengaluru,Chennai,145,1,7500
+Vistara,Hyderabad,Delhi,155,1,8900
+Akasa Air,Mumbai,Goa,100,0,3400
