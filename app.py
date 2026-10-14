@@ -1,213 +1,336 @@
-import os
-import streamlit as st
-import pandas as pd
-import numpy as np
+from pathlib import Path
 import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split
+import numpy as np
+import pandas as pd
+import streamlit as st
 from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.pipeline import Pipeline
-from sklearn.impute import SimpleImputer
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder
 
-st.set_page_config(page_title="AeroInsight | Flight Analytics", page_icon="✈️", layout="wide")
-NAVY, BLUE, TEAL, PALE, MUTED = "#102A43", "#246BCE", "#0F9D91", "#F2F6FC", "#627D98"
-st.markdown(f"""
+st.set_page_config(page_title="AeroInsight | Flight Fare Prediction", page_icon="✈️", layout="wide")
+
+st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-html, body, [class*="css"] {{font-family:Inter,sans-serif}}
-.stApp {{background:{PALE};color:{NAVY}}}
-[data-testid="stHeader"] {{background:rgba(242,246,252,.92)}}
-.block-container {{padding-top:1.5rem;max-width:1500px}}
-[data-testid="stSidebar"] {{background:linear-gradient(180deg,#102A43,#0B1F33)}}
-[data-testid="stSidebar"] * {{color:#F4F8FC}}
-[data-testid="stSidebar"] [data-testid="stFileUploaderDropzone"] {{background:#173B5D;border:1px dashed #76A9E8}}
-.hero {{background:linear-gradient(110deg,#102A43,#174C78 60%,#246BCE);color:white;padding:1.8rem 2rem;border-radius:18px;margin-bottom:1.2rem}}
-.hero h1 {{color:white;margin:0;font-size:2.3rem;font-weight:800}}
-.hero p {{color:#D9EAFB;margin:.5rem 0 0}}
-.eyebrow {{text-transform:uppercase;letter-spacing:.14em;font-size:.72rem;color:#A9D7FF;font-weight:700}}
-.metric-card {{background:white;border:1px solid #D9E4F2;border-radius:14px;padding:1rem 1.15rem;min-height:108px;box-shadow:0 3px 12px #102a430a}}
-.metric-label {{color:{MUTED};font-size:.8rem;font-weight:600}}
-.metric-value {{color:{NAVY};font-size:1.8rem;font-weight:800;margin-top:.3rem}}
-.metric-note {{color:{TEAL};font-size:.76rem;margin-top:.15rem}}
-div[data-testid="stPlotlyChart"], div[data-testid="stImage"] {{background:white;border:1px solid #D9E4F2;border-radius:14px;padding:.4rem}}
-.stButton button,.stDownloadButton button {{border-radius:9px;font-weight:700}}
+.stApp {background-color:#f3f6fb}
+[data-testid="stSidebar"] {background-color:#10243a}
+[data-testid="stSidebar"] * {color:white}
+.hero {padding:28px;border-radius:16px;color:white;background:linear-gradient(120deg,#10243a,#176b87);margin-bottom:20px}
+.hero h1 {color:white;margin-bottom:5px}
+div[data-testid="stMetric"] {background:#fff!important;color:#10243a!important;padding:15px;border-radius:12px;border:1px solid #dbe4ee}
+div[data-testid="stMetric"] label,div[data-testid="stMetric"] [data-testid="stMetricLabel"],div[data-testid="stMetric"] [data-testid="stMetricValue"],div[data-testid="stMetric"] [data-testid="stMetricDelta"] {color:#10243a!important;opacity:1!important}
 </style>
 """, unsafe_allow_html=True)
 
-def find_col(df, names):
-    cols={str(c).lower().strip():c for c in df.columns}
-    for n in names:
-        if n.lower() in cols: return cols[n.lower()]
-    for c in df.columns:
-        norm=str(c).lower().replace("_"," ").strip()
-        if any(n.lower() in norm for n in names): return c
+def create_sample_data():
+    rng = np.random.default_rng(42)
+    airlines = ["IndiGo", "Air India", "Vistara", "SpiceJet", "AirAsia"]
+    cities = ["Delhi", "Mumbai", "Bengaluru", "Hyderabad", "Chennai", "Kolkata"]
+    rows = []
+    for _ in range(250):
+        airline = rng.choice(airlines)
+        source, destination = rng.choice(cities, 2, replace=False)
+        stops = int(rng.choice([0, 1, 2], p=[0.55, 0.38, 0.07]))
+        month, day = int(rng.integers(1, 13)), int(rng.integers(1, 29))
+        dep_hour = int(rng.integers(0, 24))
+        duration = int(rng.integers(70, 350) + stops * 50)
+        airline_cost = {"IndiGo": 0, "Air India": 1600, "Vistara": 2400, "SpiceJet": -400, "AirAsia": -600}[airline]
+        price = 2500 + duration * 12 + stops * 1200 + airline_cost + (1200 if month in [5, 6, 11, 12] else 0) + rng.normal(0, 700)
+        rows.append([airline, source, destination, stops, day, month, dep_hour, duration, max(1500, round(price / 10) * 10)])
+    return pd.DataFrame(rows, columns=["Airline", "Source", "Destination", "Total_Stops", "Journey_Day", "Journey_Month", "Dep_Hour", "Duration_Minutes", "Price"])
+
+def find_fare_column(frame):
+    for col in frame.columns:
+        if col.strip().lower() in ["price", "fare", "flight_price", "ticket_price"]:
+            return col
     return None
 
-def metric(label,value,note):
-    st.markdown(f'<div class="metric-card"><div class="metric-label">{label}</div><div class="metric-value">{value}</div><div class="metric-note">{note}</div></div>',unsafe_allow_html=True)
+def make_statistics(frame):
+    numeric = frame.select_dtypes(include=np.number)
+    if numeric.empty:
+        return pd.DataFrame()
+    return pd.DataFrame({
+        "Count": numeric.count(), "Mean": numeric.mean(), "Median": numeric.median(),
+        "Mode": [numeric[c].mode().iloc[0] if not numeric[c].mode().empty else np.nan for c in numeric.columns],
+        "Standard Deviation": numeric.std(), "Minimum": numeric.min(), "Maximum": numeric.max(),
+        "Missing Values": numeric.isna().sum()
+    }).round(2)
 
-@st.cache_data
-def sample_data():
-    path=os.path.join(os.path.dirname(__file__),"data","sample_flights.csv")
-    if os.path.exists(path): return pd.read_csv(path)
-    rng=np.random.default_rng(12); n=250
-    airline=rng.choice(["IndiGo","Air India","Vistara","SpiceJet","AirAsia"],n)
-    duration=rng.integers(60,600,n); stops=rng.choice([0,1,2],n)
-    fare=np.maximum(1800,3000+duration*7+stops*1400+rng.normal(0,1200,n))
-    return pd.DataFrame({"Airline":airline,"Source":rng.choice(["Delhi","Mumbai","Chennai","Bengaluru"],n),"Destination":rng.choice(["Goa","Delhi","Kolkata","Mumbai"],n),"Duration_Minutes":duration,"Total_Stops":stops,"Price":fare.round(0)})
+def show_plot(fig):
+    fig.tight_layout()
+    st.pyplot(fig, use_container_width=True)
+    plt.close(fig)
 
-st.sidebar.markdown("# ✈ AeroInsight")
-st.sidebar.caption("FLIGHT FARE PREDICTION")
-st.sidebar.markdown("---")
-page=st.sidebar.radio("NAVIGATION",["Overview","Explore Data","Fare Prediction","About"])
-uploaded=st.sidebar.file_uploader("Upload flight dataset (CSV)",type=["csv"])
-if uploaded:
-    try: df=pd.read_csv(uploaded); st.sidebar.success(f"Loaded {len(df):,} rows")
-    except Exception as e: st.sidebar.error(f"Unable to read CSV: {e}"); df=sample_data()
+st.sidebar.title("✈ AeroInsight")
+st.sidebar.caption("Flight Fare Analytics Studio")
+st.sidebar.divider()
+uploaded_file = st.sidebar.file_uploader("Upload your flight dataset", type=["csv"])
+st.sidebar.info("Upload a CSV with a numeric Price or Fare column to enable fare prediction.")
+
+if uploaded_file is not None:
+    try:
+        df = pd.read_csv(uploaded_file)
+    except Exception as error:
+        st.error(f"Could not read this CSV: {error}")
+        st.stop()
 else:
-    df=sample_data(); st.sidebar.info("Using sample dataset")
-df.columns=[str(c).strip() for c in df.columns]
-fare_col=find_col(df,["price","fare","ticket price","flight price"])
-if fare_col is None:
-    st.error("Please upload a CSV with a numeric column named Price or Fare.")
-    st.write("Columns found:",list(df.columns)); st.stop()
-df[fare_col]=pd.to_numeric(df[fare_col].astype(str).str.replace(r"[₹$,]","",regex=True),errors="coerce")
-df=df.dropna(subset=[fare_col]).copy()
-if df.empty: st.error("No numeric fare values found in that CSV."); st.stop()
-airline=find_col(df,["airline","carrier"])
-source=find_col(df,["source","origin","from"])
-dest=find_col(df,["destination","dest","to"])
-duration=find_col(df,["duration minutes","duration_min","duration","journey time"])
-stops=find_col(df,["total stops","stops","stop"])
-st.markdown('<div class="hero"><div class="eyebrow">FLIGHT INTELLIGENCE • DATA-DRIVEN DECISIONS</div><h1>✈ AeroInsight</h1><p>Understand flight fares, discover patterns, and estimate prices with machine learning.</p></div>',unsafe_allow_html=True)
-st.caption(f"Dataset: {len(df):,} records · Fare column: {fare_col} · INR assumed for display")
-if page=="Overview":
-    c1,c2,c3,c4=st.columns(4)
-    with c1: metric("TOTAL RECORDS",f"{len(df):,}","Rows in current dataset")
-    with c2: metric("TOTAL FEATURES",str(len(df.columns)),"Columns available")
-    with c3: metric("MISSING CELLS",f"{df.isna().sum().sum():,}","Across all columns")
-    with c4: metric("AVERAGE FARE",f"₹{df[fare_col].mean():,.0f}",f"Median ₹{df[fare_col].median():,.0f}")
-    st.markdown("### Fare & route analytics")
-    st.caption("Six views of your dataset. Charts adapt to the columns available in your CSV.")
-    a,b,c=st.columns(3)
-    with a:
-        st.markdown("**1 · Fare distribution**")
-        fig,ax=plt.subplots(figsize=(5,3)); ax.hist(df[fare_col],bins=20,color=BLUE,edgecolor="white"); ax.set_xlabel("Fare"); ax.set_ylabel("Flights"); ax.grid(axis="y",alpha=.2); fig.tight_layout(); st.pyplot(fig); plt.close(fig)
-    with b:
-        st.markdown("**2 · Average fare by airline**")
-        if airline:
-            x=df.groupby(airline)[fare_col].mean().sort_values()
-            fig,ax=plt.subplots(figsize=(5,3)); x.plot.barh(ax=ax,color=TEAL); ax.set_xlabel("Average fare"); ax.set_ylabel(""); ax.grid(axis="x",alpha=.2); fig.tight_layout(); st.pyplot(fig); plt.close(fig)
-        else: st.info("Add an Airline column to show this chart.")
-    with c:
-        st.markdown("**3 · Average fare by source/destination**")
-        group=source or dest
-        if group:
-            x=df.groupby(group)[fare_col].mean().sort_values(ascending=False).head(10)
-            fig,ax=plt.subplots(figsize=(5,3)); x.plot.bar(ax=ax,color="#F59E0B"); ax.set_ylabel("Average fare"); ax.set_xlabel(""); ax.tick_params(axis="x",rotation=35); ax.grid(axis="y",alpha=.2); fig.tight_layout(); st.pyplot(fig); plt.close(fig)
-        else: st.info("Add Source or Destination to show this chart.")
-    d,e,f=st.columns(3)
-    with d:
-        st.markdown("**4 · Duration vs fare**")
-        if duration:
-            dur=pd.to_numeric(df[duration].astype(str).str.extract(r"(\d+(?:\.\d+)?)")[0],errors="coerce")
-            fig,ax=plt.subplots(figsize=(5,3)); ax.scatter(dur,df[fare_col],alpha=.55,s=18,color=BLUE); ax.set_xlabel(duration); ax.set_ylabel("Fare"); ax.grid(alpha=.2); fig.tight_layout(); st.pyplot(fig); plt.close(fig)
-        else: st.info("Add a Duration column to show this chart.")
-    with e:
-        st.markdown("**5 · Flights by number of stops**")
-        if stops:
-            x=df[stops].fillna("Unknown").astype(str).value_counts()
-            fig,ax=plt.subplots(figsize=(5,3)); ax.pie(x.values,labels=x.index,autopct="%1.0f%%",startangle=90,colors=[BLUE,TEAL,"#F59E0B","#8B5CF6","#94A3B8"]); ax.axis("equal"); fig.tight_layout(); st.pyplot(fig); plt.close(fig)
-        else: st.info("Add Total_Stops or Stops to show this chart.")
-    with f:
-        st.markdown("**6 · Fare spread by airline**")
-        if airline:
-            top=df[airline].value_counts().head(8).index
-            vals=[df.loc[df[airline]==v,fare_col].dropna().values for v in top]
-            fig,ax=plt.subplots(figsize=(5,3)); ax.boxplot(vals,tick_labels=[str(v) for v in top]); ax.set_ylabel("Fare"); ax.tick_params(axis="x",rotation=35); ax.grid(axis="y",alpha=.2); fig.tight_layout(); st.pyplot(fig); plt.close(fig)
-        else:
-            fig,ax=plt.subplots(figsize=(5,3)); ax.boxplot(df[fare_col]); ax.set_ylabel("Fare"); ax.grid(axis="y",alpha=.2); fig.tight_layout(); st.pyplot(fig); plt.close(fig)
-    st.markdown("### Data preview")
-    st.dataframe(df.head(10),use_container_width=True,hide_index=True)
-    st.download_button("Download cleaned dataset",df.to_csv(index=False).encode(), "aeroinsight_cleaned_data.csv","text/csv")
-elif page=="Explore Data":
-    st.markdown("## Explore your dataset")
-    left,right=st.columns(2)
+    sample_path = Path(__file__).parent / "data" / "sample_flights.csv"
+    df = pd.read_csv(sample_path) if sample_path.exists() else create_sample_data()
+
+df.columns = [str(c).strip().replace(" ", "_") for c in df.columns]
+df = df.dropna(how="all")
+if df.empty:
+    st.error("The dataset is empty. Please upload a CSV containing data.")
+    st.stop()
+fare_column = find_fare_column(df)
+
+st.markdown("""<div class="hero"><h1>✈ AeroInsight</h1><p>Flight Fare Prediction & Statistical Analytics Dashboard</p></div>""", unsafe_allow_html=True)
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("Total Records", f"{len(df):,}")
+c2.metric("Total Features", f"{len(df.columns):,}")
+c3.metric("Missing Cells", f"{int(df.isna().sum().sum()):,}")
+if fare_column and pd.api.types.is_numeric_dtype(df[fare_column]):
+    c4.metric("Average Fare", f"{df[fare_column].mean():,.2f}")
+else:
+    c4.metric("Numeric Columns", len(df.select_dtypes(include=np.number).columns))
+
+overview, statistics, charts, prediction, dataset = st.tabs(["🏠 Overview", "📊 Statistics", "📈 Visual Analytics", "🤖 Fare Prediction", "📁 Dataset"])
+
+with overview:
+    left, right = st.columns([1.2, 1])
     with left:
-        st.markdown("### Descriptive statistics")
-        st.dataframe(df.describe(include="all").T,use_container_width=True)
+        st.subheader("Dataset Preview")
+        st.dataframe(df.head(10), use_container_width=True)
     with right:
-        st.markdown("### Missing values by column")
-        x=df.isna().sum().sort_values(ascending=False)
-        fig,ax=plt.subplots(figsize=(6,3.5)); x.plot.bar(ax=ax,color=BLUE); ax.set_ylabel("Missing cells"); ax.tick_params(axis="x",rotation=40); ax.grid(axis="y",alpha=.2); fig.tight_layout(); st.pyplot(fig); plt.close(fig)
-        st.markdown("### Numeric correlation heatmap")
-        numeric=df.select_dtypes(include=np.number)
-        if len(numeric.columns)>=2:
-            corr=numeric.corr(); fig,ax=plt.subplots(figsize=(6,4)); im=ax.imshow(corr,cmap="Blues",vmin=-1,vmax=1); ax.set_xticks(range(len(corr.columns))); ax.set_xticklabels(corr.columns,rotation=45,ha="right"); ax.set_yticks(range(len(corr.columns))); ax.set_yticklabels(corr.columns); fig.colorbar(im,ax=ax); fig.tight_layout(); st.pyplot(fig); plt.close(fig)
-        else: st.info("Need at least two numeric columns.")
-    st.markdown("### Filter records")
-    col=st.selectbox("Filter by column",["None"]+list(df.columns))
-    filtered=df
-    if col!="None":
-        vals=df[col].dropna().unique().tolist()
-        if len(vals)<=100:
-            chosen=st.multiselect("Values to keep",vals,default=vals); filtered=df[df[col].isin(chosen)]
-        else: st.caption("Many unique values; showing all rows.")
-    st.dataframe(filtered,use_container_width=True,hide_index=True)
-    st.caption(f"Showing {len(filtered):,} of {len(df):,} records.")
-elif page=="Fare Prediction":
-    st.markdown("## Flight fare prediction")
-    st.caption("A Random Forest model learns patterns in your dataset. Predictions are estimates, not guaranteed ticket prices.")
-    work=df.dropna(subset=[fare_col]).copy()
-    features=[c for c in work.columns if c!=fare_col and work[c].nunique(dropna=True)>1]
-    if len(work)<12 or not features:
-        st.warning("Upload at least 12 rows and one useful feature column besides Price/Fare.")
+        st.subheader("Data Quality Report")
+        quality = pd.DataFrame({"Column": df.columns, "Data Type": [str(df[c].dtype) for c in df.columns],
+            "Missing Values": [int(df[c].isna().sum()) for c in df.columns], "Unique Values": [int(df[c].nunique()) for c in df.columns]})
+        st.dataframe(quality, use_container_width=True, hide_index=True)
+    if fare_column and pd.api.types.is_numeric_dtype(df[fare_column]):
+        st.subheader("Fare at a Glance")
+        fares = df[fare_column].dropna()
+        if not fares.empty:
+            a, b, c, d = st.columns(4)
+            a.metric("Mean", f"{fares.mean():,.2f}")
+            b.metric("Median", f"{fares.median():,.2f}")
+            modes = fares.mode()
+            c.metric("Mode", f"{modes.iloc[0]:,.2f}" if not modes.empty else "N/A")
+            d.metric("Fare Range", f"{fares.min():,.0f} – {fares.max():,.0f}")
+
+with statistics:
+    st.subheader("Descriptive Statistics")
+    st.write("Statistical measures for all numeric columns.")
+    summary = make_statistics(df)
+    if not summary.empty:
+        st.dataframe(summary, use_container_width=True)
+        st.download_button("Download Statistics CSV", summary.to_csv().encode("utf-8"), "flight_statistics.csv", "text/csv")
     else:
-        X=work[features].copy(); y=work[fare_col].astype(float)
-        cat=list(X.select_dtypes(include=["object","category"]).columns)
-        num=[c for c in X.columns if c not in cat]
-        for c in cat: X[c]=X[c].fillna("Unknown").astype(str)
-        for c in num: X[c]=pd.to_numeric(X[c],errors="coerce")
-        transformers=[]
-        if num: transformers.append(("num",Pipeline([("imputer",SimpleImputer(strategy="median"))]),num))
-        if cat: transformers.append(("cat",Pipeline([("imputer",SimpleImputer(strategy="most_frequent")),("onehot",OneHotEncoder(handle_unknown="ignore"))]),cat))
-        model=Pipeline([("prep",ColumnTransformer(transformers)),("rf",RandomForestRegressor(n_estimators=150,random_state=42))])
-        test_n=max(2,int(round(len(work)*.2)))
-        Xtr,Xte,ytr,yte=train_test_split(X,y,test_size=test_n,random_state=42)
-        model.fit(Xtr,ytr); pred=model.predict(Xte)
-        mae=mean_absolute_error(yte,pred); rmse=float(np.sqrt(mean_squared_error(yte,pred))); r2=r2_score(yte,pred)
-        c1,c2,c3=st.columns(3)
-        with c1: metric("MAE",f"₹{mae:,.0f}","Lower is generally better")
-        with c2: metric("RMSE",f"₹{rmse:,.0f}","Penalizes larger errors")
-        with c3: metric("R² SCORE",f"{r2:.3f}","Closer to 1 is generally better")
-        st.markdown("### Enter flight details")
-        with st.form("predict_form"):
-            values={}; cols=st.columns(2)
-            for i,col in enumerate(features):
-                s=work[col]
-                with cols[i%2]:
-                    if col in cat:
-                        opts=s.dropna().astype(str).value_counts().index.tolist() or ["Unknown"]
-                        values[col]=st.selectbox(str(col),opts,key="pred_"+str(col))
+        st.warning("No numeric columns were detected.")
+    categorical = df.select_dtypes(exclude=np.number).columns.tolist()
+    if categorical:
+        st.subheader("Categorical Frequency Table")
+        category = st.selectbox("Select a category", categorical, key="frequency_category")
+        freq = df[category].fillna("(Missing)").astype(str).value_counts().rename_axis(category).reset_index(name="Frequency")
+        st.dataframe(freq, use_container_width=True, hide_index=True)
+
+with charts:
+    st.subheader("Visual Analytics")
+    st.caption("Explore distributions, relationships, and flight fare patterns.")
+    numeric_columns = df.select_dtypes(include=np.number).columns.tolist()
+    categorical_columns = df.select_dtypes(exclude=np.number).columns.tolist()
+    selected_numeric = fare_column if fare_column in numeric_columns else (numeric_columns[0] if numeric_columns else None)
+    left, right = st.columns(2)
+    with left:
+        st.markdown("### 1. Histogram")
+        if selected_numeric:
+            fig, ax = plt.subplots(figsize=(7, 4))
+            ax.hist(df[selected_numeric].dropna(), bins=25, edgecolor="white")
+            ax.set_title(f"Distribution of {selected_numeric}"); ax.set_xlabel(selected_numeric); ax.set_ylabel("Frequency")
+            show_plot(fig)
+        else: st.info("A numeric column is required.")
+    with right:
+        st.markdown("### 2. Box Plot")
+        if selected_numeric:
+            fig, ax = plt.subplots(figsize=(7, 4))
+            ax.boxplot(df[selected_numeric].dropna())
+            ax.set_title(f"Box Plot of {selected_numeric}"); ax.set_ylabel(selected_numeric)
+            show_plot(fig)
+        else: st.info("A numeric column is required.")
+    left, right = st.columns(2)
+    with left:
+        st.markdown("### 3. Average Fare by Category")
+        if fare_column and fare_column in numeric_columns and categorical_columns:
+            category = st.selectbox("Group fares by", categorical_columns, key="average_category")
+            grouped = df.groupby(category, dropna=False)[fare_column].mean().sort_values(ascending=False).head(12)
+            fig, ax = plt.subplots(figsize=(7, 4)); grouped.plot(kind="bar", ax=ax)
+            ax.set_title(f"Average Fare by {category}"); ax.set_ylabel("Average Fare"); ax.tick_params(axis="x", rotation=35)
+            show_plot(fig)
+        else: st.info("Requires a numeric fare column and a category.")
+    with right:
+        st.markdown("### 4. Correlation Heatmap")
+        if len(numeric_columns) >= 2:
+            corr = df[numeric_columns].corr()
+            fig, ax = plt.subplots(figsize=(7, 4)); im = ax.imshow(corr, vmin=-1, vmax=1, aspect="auto")
+            ax.set_xticks(range(len(corr.columns))); ax.set_xticklabels(corr.columns, rotation=70, ha="right")
+            ax.set_yticks(range(len(corr.index))); ax.set_yticklabels(corr.index); ax.set_title("Numeric Feature Correlations")
+            fig.colorbar(im, ax=ax); show_plot(fig)
+        else: st.info("Requires at least two numeric columns.")
+    left, right = st.columns(2)
+    with left:
+        st.markdown("### 5. Category Counts")
+        if categorical_columns:
+            category = st.selectbox("Select category to count", categorical_columns, key="count_category")
+            counts = df[category].fillna("(Missing)").astype(str).value_counts().head(12).sort_values()
+            fig, ax = plt.subplots(figsize=(7, 4)); counts.plot(kind="barh", ax=ax)
+            ax.set_title(f"Most Common {category} Values"); ax.set_xlabel("Number of Records"); show_plot(fig)
+        else: st.info("Requires a categorical column.")
+    with right:
+        st.markdown("### 6. Scatter Plot")
+        if len(numeric_columns) >= 2:
+            x_col = st.selectbox("X-axis", numeric_columns, key="scatter_x")
+            y_col = st.selectbox("Y-axis", [c for c in numeric_columns if c != x_col], key="scatter_y")
+            points = df[[x_col, y_col]].dropna()
+            if len(points) > 2500: points = points.sample(2500, random_state=42)
+            fig, ax = plt.subplots(figsize=(7, 4)); ax.scatter(points[x_col], points[y_col], alpha=0.6)
+            ax.set_xlabel(x_col); ax.set_ylabel(y_col); ax.set_title(f"{y_col} vs {x_col}"); show_plot(fig)
+        else: st.info("Requires at least two numeric columns.")
+
+with prediction:
+    st.subheader("Flight Fare Prediction")
+    st.write("Train a Random Forest model, predict fares for a route, and compare estimates across locations.")
+    if not fare_column:
+        st.warning("Name the numeric target column Price or Fare to enable prediction.")
+    elif not pd.api.types.is_numeric_dtype(df[fare_column]):
+        st.warning("Your fare column must contain numeric values.")
+    elif len(df.dropna(subset=[fare_column])) < 10:
+        st.warning("Please provide at least 10 rows with known fare values.")
+    else:
+        model_data = df.dropna(subset=[fare_column]).copy()
+        y = pd.to_numeric(model_data[fare_column], errors="coerce")
+        model_data = model_data.loc[y.notna()].copy()
+        y = pd.to_numeric(model_data[fare_column], errors="coerce")
+        features = [col for col in model_data.columns if col != fare_column and model_data[col].nunique(dropna=True) > 1]
+        if not features:
+            st.warning("No useful input features were found.")
+        else:
+            X = model_data[features].copy()
+            numeric_features = X.select_dtypes(include=np.number).columns.tolist()
+            categorical_features = [col for col in features if col not in numeric_features]
+            for col in numeric_features: X[col] = X[col].fillna(X[col].median())
+            for col in categorical_features: X[col] = X[col].fillna("Unknown").astype(str)
+            transformers = []
+            if numeric_features: transformers.append(("numbers", "passthrough", numeric_features))
+            if categorical_features: transformers.append(("categories", OneHotEncoder(handle_unknown="ignore"), categorical_features))
+            pipeline = Pipeline([("preprocessing", ColumnTransformer(transformers)),
+                ("model", RandomForestRegressor(n_estimators=150, random_state=42, min_samples_leaf=2, n_jobs=-1))])
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+            if st.button("Train Prediction Model", type="primary"):
+                with st.spinner("Training model..."):
+                    pipeline.fit(X_train, y_train)
+                    preds = pipeline.predict(X_test)
+                    st.session_state["fare_model"] = pipeline
+                    st.session_state["fare_features"] = features
+                    st.session_state["fare_target"] = fare_column
+                    a, b, c = st.columns(3)
+                    a.metric("Mean Absolute Error", f"{mean_absolute_error(y_test, preds):,.2f}")
+                    b.metric("Root Mean Squared Error", f"{np.sqrt(mean_squared_error(y_test, preds)):,.2f}")
+                    c.metric("R² Score", f"{r2_score(y_test, preds):.3f}")
+                    st.success("Model trained successfully!")
+
+            if st.session_state.get("fare_model") is not None and st.session_state.get("fare_target") == fare_column and st.session_state.get("fare_features") == features:
+                model = st.session_state["fare_model"]
+                route_tab, compare_tab = st.tabs(["🛫 Predict by Route", "📍 Compare Locations"])
+                cities = sorted(set(df["Source"].dropna().astype(str)) | set(df["Destination"].dropna().astype(str))) if {"Source", "Destination"}.issubset(df.columns) else []
+
+                def build_input(source=None, destination=None, overrides=None):
+                    values = {}
+                    for col in features:
+                        if col in numeric_features:
+                            vals = pd.to_numeric(df[col], errors="coerce").dropna()
+                            values[col] = float(vals.median()) if not vals.empty else 0.0
+                        else:
+                            opts = sorted(df[col].dropna().astype(str).unique().tolist()) or ["Unknown"]
+                            values[col] = opts[0]
+                    if "Source" in features and source is not None: values["Source"] = source
+                    if "Destination" in features and destination is not None: values["Destination"] = destination
+                    if overrides:
+                        for col, val in overrides.items():
+                            if col in features and val is not None: values[col] = val
+                    return pd.DataFrame([{col: values[col] for col in features}], columns=features)
+
+                def estimate(source, destination, overrides=None):
+                    return float(model.predict(build_input(source, destination, overrides))[0])
+
+                with route_tab:
+                    st.markdown("### Predict fare for a specific route")
+                    if not {"Source", "Destination"}.issubset(features) or len(cities) < 2:
+                        st.warning("Both Source and Destination need to be usable model features.")
                     else:
-                        ns=pd.to_numeric(s,errors="coerce").dropna()
-                        lo=float(ns.min()) if len(ns) else 0.0; hi=float(ns.max()) if len(ns) else 100.0; default=float(ns.median()) if len(ns) else 0.0
-                        if lo==hi: hi=lo+1
-                        values[col]=st.number_input(str(col),min_value=lo,max_value=hi,value=min(max(default,lo),hi),key="pred_"+str(col))
-            submitted=st.form_submit_button("Predict estimated fare",type="primary",use_container_width=True)
-        if submitted:
-            row=pd.DataFrame([values],columns=features)
-            for col in cat: row[col]=row[col].astype(str)
-            for col in num: row[col]=pd.to_numeric(row[col],errors="coerce")
-            result=float(model.predict(row)[0])
-            st.success(f"Estimated fare: ₹{result:,.0f}")
-            st.caption("Real fares may vary with date, demand, baggage, and availability.")
-        st.markdown("### Actual vs predicted fares")
-        fig,ax=plt.subplots(figsize=(8,4)); ax.scatter(yte,pred,alpha=.7,color=BLUE); lim=[min(float(yte.min()),float(np.min(pred))),max(float(yte.max()),float(np.max(pred)))]; ax.plot(lim,lim,"--",color=TEAL); ax.set_xlabel("Actual fare"); ax.set_ylabel("Predicted fare"); ax.grid(alpha=.2); fig.tight_layout(); st.pyplot(fig); plt.close(fig)
-else:
-    st.markdown("## About AeroInsight")
-    st.write("AeroInsight is a flight fare exploration and prediction dashboard built with Streamlit, pandas, Matplotlib, and scikit-learn.")
-    st.markdown("- Upload your own CSV dataset\n- View summary KPI cards and six charts\n- Explore descriptive statistics, missing values, and correlations\n- Train a Random Forest regression model\n- Predict estimated fares and evaluate model performance")
-    st.info("For best results, use a numeric Price or Fare column plus useful features such as Airline, Source, Destination, Duration, and Stops.")
+                        c1, c2 = st.columns(2)
+                        source = c1.selectbox("Departure city", cities, key="route_source")
+                        destination = c2.selectbox("Destination city", [city for city in cities if city != source], key="route_destination")
+                        overrides = {}
+                        c1, c2, c3 = st.columns(3)
+                        if "Airline" in features:
+                            airlines = sorted(df["Airline"].dropna().astype(str).unique())
+                            overrides["Airline"] = c1.selectbox("Airline", airlines, key="route_airline")
+                        if "Total_Stops" in features:
+                            stops = sorted(pd.to_numeric(df["Total_Stops"], errors="coerce").dropna().astype(int).unique())
+                            overrides["Total_Stops"] = c2.selectbox("Number of stops", stops, key="route_stops")
+                        if "Journey_Month" in features:
+                            overrides["Journey_Month"] = c3.selectbox("Journey month", list(range(1, 13)), key="route_month")
+                        c1, c2, c3 = st.columns(3)
+                        if "Journey_Day" in features:
+                            overrides["Journey_Day"] = c1.selectbox("Journey day", list(range(1, 29)), key="route_day")
+                        if "Dep_Hour" in features:
+                            overrides["Dep_Hour"] = c2.slider("Departure hour", 0, 23, 10, key="route_hour")
+                        if "Duration_Minutes" in features:
+                            vals = pd.to_numeric(df["Duration_Minutes"], errors="coerce").dropna()
+                            overrides["Duration_Minutes"] = c3.number_input("Duration (minutes)", min_value=30, max_value=1500, value=int(vals.median()) if not vals.empty else 180, step=10, key="route_duration")
+                        if st.button("Predict Fare for This Route", type="primary", key="predict_route"):
+                            fare = estimate(source, destination, overrides)
+                            st.success(f"Estimated fare for {source} → {destination}: {fare:,.0f} (dataset currency units)")
+                            st.caption("This is a model estimate, not a live airline quote.")
+
+                with compare_tab:
+                    st.markdown("### Compare estimated fares by location")
+                    if not {"Source", "Destination"}.issubset(features) or len(cities) < 2:
+                        st.warning("Both Source and Destination need to be usable model features.")
+                    else:
+                        mode = st.radio("Comparison type", ["One departure city → many destinations", "Many departure cities → one destination"], horizontal=True)
+                        if mode.startswith("One departure"):
+                            fixed = st.selectbox("Departure city", cities, key="compare_source")
+                            options = [city for city in cities if city != fixed]
+                            selected = st.multiselect("Destinations to compare", options, default=options[:min(4, len(options))], key="compare_destinations")
+                            if st.button("Compare Destination Fares", type="primary", key="compare_dest_button"):
+                                rows = [{"Departure": fixed, "Destination": dest, "Estimated Fare": round(estimate(fixed, dest), 2)} for dest in selected]
+                                if rows:
+                                    result = pd.DataFrame(rows).sort_values("Estimated Fare")
+                                    st.dataframe(result, use_container_width=True, hide_index=True)
+                                    st.bar_chart(result.set_index("Destination")["Estimated Fare"])
+                                    st.caption("Other flight details use typical dataset values. These are estimates, not live prices.")
+                                else: st.info("Choose at least one destination.")
+                        else:
+                            fixed = st.selectbox("Destination city", cities, key="compare_destination")
+                            options = [city for city in cities if city != fixed]
+                            selected = st.multiselect("Departure cities to compare", options, default=options[:min(4, len(options))], key="compare_sources")
+                            if st.button("Compare Departure Fares", type="primary", key="compare_source_button"):
+                                rows = [{"Departure": src, "Destination": fixed, "Estimated Fare": round(estimate(src, fixed), 2)} for src in selected]
+                                if rows:
+                                    result = pd.DataFrame(rows).sort_values("Estimated Fare")
+                                    st.dataframe(result, use_container_width=True, hide_index=True)
+                                    st.bar_chart(result.set_index("Departure")["Estimated Fare"])
+                                    st.caption("Other flight details use typical dataset values. These are estimates, not live prices.")
+                                else: st.info("Choose at least one departure city.")
+            else:
+                st.info("Click **Train Prediction Model** to enable route prediction and location comparisons.")
+
+with dataset:
+    st.subheader("Complete Dataset")
+    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.download_button("Download Dataset as CSV", df.to_csv(index=False).encode("utf-8"), "flight_data.csv", "text/csv")
+
+st.sidebar.success(f"Loaded {len(df):,} records")
+st.sidebar.caption("AeroInsight · Data Science Dashboard")
